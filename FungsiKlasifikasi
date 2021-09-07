@@ -1,7 +1,5 @@
 /**** Start of imports. If edited, may not auto-convert in the playground. ****/
 var bogor = ee.FeatureCollection("users/zanomaly/kotaBogor"),
-    kabBogor = ee.FeatureCollection("users/zanomaly/kabBogor"),
-    indos = ee.FeatureCollection("users/zanomaly/gadm36_IDN3_shp"),
     Urban = 
     /* color: #808080 */
     /* shown: false */
@@ -1017,14 +1015,16 @@ var bogor = ee.FeatureCollection("users/zanomaly/kotaBogor"),
               "system:index": "53"
             })]);
 /***** End of imports. If edited, may not auto-convert in the playground. *****/
-// bogor = bogor.merge(kabBogor);
 
+// Create classification function
+// Membuat fungsi klasifikasi
 var klasifikasi = function (tanggal_awal, tanggal_akhir) {
-  // var year = ee.Number.parse(ee.Date(tanggal_awal).format('yyyy'));
+  
   var year = tanggal_awal.slice(0,4);
   print(year);
-  // print(typeof(year.int()));
   
+  // Create a function for merge 2 landsat images where Bogor located
+  // Membuat fungsi untuk menggambungkan 2 citra landsat di lokasi Kota Bogor
   function mosaicByDate(imcol){
     // imcol: An image collection
     // returns: An image collection
@@ -1049,7 +1049,8 @@ var klasifikasi = function (tanggal_awal, tanggal_akhir) {
     return ee.ImageCollection(mosaic_imlist);
   }
   
-  // Fungsi masking awan
+  // Create a function for masking cloud from the images
+  // Membuat fungsi untuk menghilangkan awan dari citra
   var cloudMask = function(image) {
     var clouds = ee.Algorithms.Landsat.simpleCloudScore(image).select(['cloud']);
     return image.updateMask(clouds.lte(30));
