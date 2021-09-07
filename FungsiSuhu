@@ -1,0 +1,711 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var bogor = ee.FeatureCollection("users/zanomaly/kotaBogor"),
+    kabBogor = ee.FeatureCollection("users/zanomaly/kabBogor"),
+    indos = ee.FeatureCollection("users/zanomaly/gadm36_IDN3_shp");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+// bogor = bogor.merge(kabBogor);
+var bogbar = indos.filter(ee.Filter.eq("NAME_3","Bogor Barat"));
+var bogsel = indos.filter(ee.Filter.eq("NAME_3","Bogor Selatan"));
+var boteng = indos.filter(ee.Filter.eq("NAME_3","Bogor Tengah"));
+var botim = indos.filter(ee.Filter.eq("NAME_3","Bogor Timur"));
+var borut = indos.filter(ee.Filter.eq("NAME_3","Bogor Utara"));
+var tasar = indos.filter(ee.Filter.eq("NAME_3","Tanah Sereal"));
+
+
+// Fungsi untuk digunakan kembali dengan masukan tanggal akhir suatu bulan, bulan, dan tahun
+var fungsiSuhu = function (tgl_akhir, bulan, tahun) {
+  var funClass = require('users/zanomaly/Skripsi:FungsiKlasifikasi'); // input fungsi untuk klasifikasi
+  var geet = require('users/elacerda/geet:geet'); // input library geet untuk menghitung indeks spektral dan lst
+  var palettes = require('users/gena/packages:palettes'); //input library keperluan pewarnaan
+  
+  // Masukan Area of Interest
+  var bog = indos.filter(ee.Filter.eq("NAME_2","Kota Bogor"));
+  
+  // Parse format tanggal
+  var tanggalAwal = tahun + "-" + bulan + "-1";
+  var tanggalAkhir = tahun + "-" + bulan + "-" + tgl_akhir;
+  
+  // Tanggal klasifikasi satu tahun penuh
+  var tanggalKlasAwal = tahun + '-1-1';
+  var tanggalKlasAkhir = tahun + '-12-31'; 
+  print(bulan);
+  
+  // Klasifikasi
+  var class18 = funClass.klasifikasi(tanggalKlasAwal, tanggalKlasAkhir);
+  // var class19 = funClass.klasifikasi("2019-1-1", "2019-12-31");
+  // var class20 = funClass.klasifikasi("2020-1-1", "2020-12-31");
+  print(class18,'klasifikasi ' + tahun);
+  
+  // Masukan data Landsat 8 RAW dan TOA
+  var l8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_TOA');
+  var l8_raw = ee.ImageCollection('LANDSAT/LC08/C01/T1');
+  
+  // Membuat fungsi untuk menggabungkan dua row L8 dari satu imageCollection
+  function mosaicByDate(imcol){
+    // imcol: An image collection
+    // returns: An image collection
+    var imlist = imcol.toList(imcol.size());
+  
+    var unique_dates = imlist.map(function(im){
+      return ee.Image(im).date().format("YYYY-MM-dd");
+    }).distinct();
+  
+    var mosaic_imlist = unique_dates.map(function(d){
+      d = ee.Date(d);
+  
+      var im = imcol
+        .filterDate(d, d.advance(1, "day"))
+        .mosaic();
+  
+      return im.set(
+          "system:time_start", d.millis(), 
+          "system:id", d.format("YYYY-MM-dd"));
+    });
+  
+    return ee.ImageCollection(mosaic_imlist);
+  }
+  
+  // Fungsi masking awan
+  var cloudMask = function(image) {
+    var clouds = ee.Algorithms.Landsat.simpleCloudScore(image).select(['cloud']);
+    return image.updateMask(clouds.lte(30));
+  };
+  
+  // TOA
+  var spatialFiltered = l8.filterBounds(bogor);
+  var temporalFiltered = spatialFiltered.filterDate(tanggalAwal, tanggalAkhir).map(cloudMask);
+  var sorted = temporalFiltered.sort('CLOUD_COVER');
+  var scene = sorted.first();
+  var scene2 = sorted.filterMetadata('WRS_ROW', 'equals', 64).first();
+  
+  // RAW
+  var spatialFilteredT = l8_raw.filterBounds(bogor);
+  var temporalFilteredT = spatialFilteredT.filterDate(tanggalAwal, tanggalAkhir).map(cloudMask);
+  var sortedT = temporalFilteredT.sort('CLOUD_COVER');
+  var sceneT = sortedT.first();
+  var scene2T = sortedT.filterMetadata('WRS_ROW', 'equals', 64).first();
+  print(sceneT, 'sct');
+  
+  // Ambil string tanggal image
+  var dateS = scene.date();
+  dateS = dateS.format('YYYY-MM-dd').getInfo();
+  print(dateS, 'date');
+  
+  var merged = mosaicByDate(temporalFiltered); //TOA
+  var mergedT = mosaicByDate(temporalFilteredT); //RAW
+  print(merged);
+  
+  //2 scene jadi 1 scene diambil cloud cover terbaik dari TOA
+  var bestJoin = merged.filterMetadata('system:id', 'equals', dateS).first();
+  var bestJoinT = mergedT.filterMetadata('system:id', 'equals', dateS); //RAW
+  
+  // Mask tutupan awan
+
+  // Add a cloud score band.  It is automatically called 'cloud'.
+  var scored = ee.Algorithms.Landsat.simpleCloudScore(bestJoin.set('SENSOR_ID', 'OLI_TIRS'));
+  
+  // Create a mask from the cloud score and combine it with the image mask.
+  var mask = scored.select(['cloud']).lte(30);
+  
+  // properties yg dibutuhkan
+  
+  // Ambil properties yg dibutuhkan dari 2 image yg belum dijoin
+  // RADIANCE_MULT_BAND_2-4
+  var radM2 = sceneT.get('RADIANCE_MULT_BAND_2'); //Butuh yg RAW aja
+  var radM3 = sceneT.get('RADIANCE_MULT_BAND_3'); //M nilainya sama antara 2 image bogor
+  var radM4 = sceneT.get('RADIANCE_MULT_BAND_4');
+  var radM10 = sceneT.get('RADIANCE_MULT_BAND_10');
+  
+  // RADIANCE_ADD_BAND_2-4
+  var radA2 = sceneT.get('RADIANCE_ADD_BAND_2');
+  var radA3 = sceneT.get('RADIANCE_ADD_BAND_3');
+  var radA4 = sceneT.get('RADIANCE_ADD_BAND_4');
+  var radA10 = sceneT.get('RADIANCE_ADD_BAND_10');
+  var radA2_2 = scene2T.get('RADIANCE_ADD_BAND_2');
+  var radA3_2 = scene2T.get('RADIANCE_ADD_BAND_3');
+  var radA4_2 = scene2T.get('RADIANCE_ADD_BAND_4');
+  var radA10_2 = scene2T.get('RADIANCE_ADD_BAND_10');
+  
+  var avgA2 = ee.Number(radA2).add(radA2_2).divide(2);
+  var avgA3 = ee.Number(radA3).add(radA3_2).divide(2);
+  var avgA4 = ee.Number(radA4).add(radA4_2).divide(2);
+  var avgA10 = ee.Number(radA10).add(radA10_2).divide(2);
+  
+  // K1_CONSTANT_BAND_10
+  var K1_10 = sceneT.get('K1_CONSTANT_BAND_10');
+  // K1_CONSTANT_BAND_11
+  var K1_11 = sceneT.get('K1_CONSTANT_BAND_11');
+  // K2_CONSTANT_BAND_10
+  var K2_10 = sceneT.get('K2_CONSTANT_BAND_10');
+  // K2_CONSTANT_BAND_11
+  var K2_11 = sceneT.get('K2_CONSTANT_BAND_11');
+  
+  var tambahProp = function (ini) {
+    return ini.set("RADIANCE_MULT_BAND_2", radM2, 
+          "RADIANCE_MULT_BAND_3", radM3,
+          "RADIANCE_MULT_BAND_4", radM4,
+          "RADIANCE_MULT_BAND_10", radM10,
+          "RADIANCE_ADD_BAND_2", avgA2,
+          "RADIANCE_ADD_BAND_3", avgA3,
+          "RADIANCE_ADD_BAND_4", avgA4,
+          "RADIANCE_ADD_BAND_10", avgA10,
+          'K1_CONSTANT_BAND_10', K1_10,
+          'K1_CONSTANT_BAND_11', K1_11,
+          'K2_CONSTANT_BAND_10', K2_10,
+          'K2_CONSTANT_BAND_11', K2_11);
+          
+  };
+  
+  bestJoinT = bestJoinT.map(tambahProp).first();
+  
+  bestJoinT = bestJoinT.updateMask(mask);
+  
+  print(bestJoinT,'bjt');
+  
+  // var plotrgb = geet.plot_rgb(bestJoinT.clip(bogor), 'rgb');
+  
+  // EARTH_SUN_DISTANCE
+  var esDistance = sceneT.get('EARTH_SUN_DISTANCE');
+  var esDistance2 = scene2T.get('EARTH_SUN_DISTANCE');
+  var avgD = ee.Number(esDistance).add(esDistance2).divide(2);
+  
+  // SUN_ELEVATION
+  var sunElev = sceneT.get('SUN_ELEVATION');
+  var sunElev2 = scene2T.get('SUN_ELEVATION');
+  var avgSE = ee.Number(sunElev).add(sunElev2).divide(2);
+  
+  // raw to toa_radiance per band
+  var toaB4 = geet.toa_radiance(bestJoinT, 4);
+  var toaB3 = geet.toa_radiance(bestJoinT, 3);
+  var toaB2 = geet.toa_radiance(bestJoinT, 2);
+  
+  var toaRGB = ee.Image.cat([toaB4,toaB3,toaB2]);
+  
+  var toa = geet.toa_radiance(bestJoinT, 10);
+  var ndvi = geet.ndvi_l8(toa);
+  var bt = geet.brightness_temp_l8c(ndvi, true);
+  var propVeg = geet.prop_veg(bt);
+  var lse = geet.surface_emissivity(propVeg);
+  var lst = geet.surface_temperature_tm(lse);
+  var ndbi = geet.landsat_indices(bestJoinT, 'L8', 'ndbi');
+  ndbi = ndbi.select('NDBI');
+  var vis = {min:-1,max:1, palette:palettes.colorbrewer.OrRd[7]};
+  var ndbiVis = ndbi.clip(bogor).visualize(vis);
+  // Map.addLayer(ndbi.clip(bogor), vis, 'ndbi ' + tahun);
+  lst = lst.updateMask(mask);
+  var lstn = lst.select('LST');
+  // Map.addLayer(lstn, {min: 0, max: 35, palette:palet},'LST ' + tahun);
+  print(ndvi, 'ndvi');
+  
+  // Raster to Vector LST
+  var lstCol = lstn.clipToCollection(bog);
+
+  var lstVec = lstCol.gt(0).add(lstCol.gt(20))
+  .add(lstCol.gt(23)).add(lstCol.gt(26)).add(lstCol.gt(29)).add(lstCol.gt(32));
+  lstVec = lstVec.updateMask(lstVec.neq(0));
+
+  var palet = palettes.kovesi.rainbow_bgyr_35_85_c72[7];
+  var lstVecVis = lstVec.visualize({min: 0, max: 6, palette:palet});
+
+  // Map.addLayer(lstVec, {min: 0, max: 6, palette:palet},'LST Vektor ' + tahun);
+
+  Export.image.toDrive({
+    image: lstVecVis,
+    description: 'LSTVektor' + tahun,
+    region: bog,
+    scale: 30
+  });
+
+  // Raster to Vector NDVI
+  var NDVICol = ndvi.select('NDVI').clipToCollection(bog);
+
+  var NDVIV = NDVICol.gt(-1).add(NDVICol.gt(-0.2))
+  .add(NDVICol.gt(0.25)).add(NDVICol.gt(0.6));
+  NDVIV = NDVIV.updateMask(NDVIV.neq(0));
+
+  var palet = palettes.kovesi.linear_green_5_95_c69[7].reverse().slice(0,4);
+  var NDVIVis = NDVIV.visualize({min: 0, max: 4, palette:palet});
+
+  // Map.addLayer(NDVIV, {min: 0, max: 4, palette:palet},'NDVI Vektor ' + tahun);
+  
+  Export.image.toDrive({
+    image: NDVIVis,
+    description: 'NDVIVektor' + tahun,
+    region: bog,
+    scale: 30
+  });
+  
+  
+  // Raster to Vector NDBI
+  var NDBICol = ndbi.clipToCollection(bog);
+
+  var NDBIV = NDBICol.gt(-0.3).add(NDBICol.gt(-0.15))
+  .add(NDBICol.gt(0)).add(NDBICol.gt(0.15)).add(NDBICol.gt(0.3));
+  NDBIV = NDBIV.updateMask(NDBIV.neq(0));
+
+  var palet = palettes.kovesi.linear_kry_5_98_c75[7].reverse().slice(0,6);
+  var NDBIVis = NDBIV.visualize({min: 0, max: 5, palette:palet});
+
+  // Map.addLayer(NDBIV, {min: 0, max: 5, palette:palet},'NDBI Vektor ' + tahun);
+  
+  Export.image.toDrive({
+    image: NDBIVis,
+    description: 'NDBIVektor' + tahun,
+    region: bog,
+    scale: 30
+  });
+  
+  // Regresi LST x NDBI
+  // var korelasi = geet.spearmans_correlation(lstn, ndbi, bogor);
+  
+  var regresi = ee.Image.cat(ndvi.select('NDVI'), lstn);
+  regresi = regresi.reduceRegion({
+    reducer: ee.Reducer.linearFit(),
+    geometry: bogor,
+    scale: 30,
+  });
+  print('Korelasi NDVI x LST ' + tahun + ':', regresi);
+  
+  var pixelLST = lstn.reduceRegion({
+    reducer: ee.Reducer.toList(),
+    geometry: bog.geometry(),
+    scale: 120,
+    maxPixels: 1e9,
+  });
+    
+  var pixelNDBI = ndvi.select('NDVI').reduceRegion({
+    reducer: ee.Reducer.toList(),
+    geometry: bog.geometry(),
+    scale: 120,
+    maxPixels: 1e9,
+  });
+  var x = ee.List(pixelNDBI.get('NDVI'));
+  var y = ee.List(pixelLST.get('LST'));
+
+  var chart = ui.Chart.array.values({array: y, axis: 0, xLabels: x}).setOptions({
+    title: tahun,
+    colors: ['cf513e'],
+    hAxis: {
+      'title': 'NDVI',
+      // titleTextStyle: {italic: false, bold: true}
+    },
+    vAxis: {
+      'title': 'Suhu permukaan (deg C)',
+      // titleTextStyle: {italic: false, bold: true}
+    },
+    pointSize: 4,
+    dataOpacity: 0.4,
+    trendlines: { 0: {showR2: true, visibleInLegend: true} , 
+                    1: {showR2: true, visibleInLegend: true}}
+  });
+  print(chart); 
+  
+  var palet = palettes.misc.tol_rainbow[7];
+  var viz = {min:0,max:35,palette:palet};
+  var lstVis = lstn.clip(bogor).visualize(viz);
+  
+  Export.image.toDrive({
+    image: ndbiVis,
+    description: 'NDBI' + tahun,
+    region: bog,
+    scale: 30
+  });
+  
+  var maxLST = geet.max(lstn, bogor);
+  var minLST = geet.min(lstn, bogor);
+  var sdLST = geet.sd(lstn, bogor);
+  var rataLST = geet.mean(lstn, bogor);
+  print(lstn, 'lst ' + tahun);
+  print('max LST:', maxLST);
+  print('min LST:', minLST);
+  print('StDev LST:', sdLST);
+  print('rata LST:', rataLST);
+
+  var maxNDVI = geet.max(ndvi.select('NDVI'), bogor);
+  var minNDVI = geet.min(ndvi.select('NDVI'), bogor);
+  var sdNDVI = geet.sd(ndvi.select('NDVI'), bogor);
+  var rataNDVI = geet.mean(ndvi.select('NDVI'), bogor);
+  print('NDVI ' + tahun);
+  print('max NDVI:', maxNDVI);
+  print('min NDVI:', minNDVI);
+  print('StDev NDVI:', sdNDVI);
+  print('rata NDVI:', rataNDVI);
+  
+  var maxNDBI = geet.max(ndbi, bogor);
+  var minNDBI = geet.min(ndbi, bogor);
+  var sdNDBI = geet.sd(ndbi, bogor);
+  var rataNDBI = geet.mean(ndbi, bogor);
+  print(ndbi, 'NDBI ' + tahun);
+  print('max NDBI:', maxNDBI);
+  print('min NDBI:', minNDBI);
+  print('StDev NDBI:', sdNDBI);
+  print('rata NDBI:', rataNDBI);
+
+  
+  var meanLST = lstn.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: bogor.geometry(),
+    scale: 30,
+    maxPixels: 1e9
+  });
+  print("lst mean", meanLST);
+  
+  var consMeanLST = meanLST.get('LST');
+  print('Rata-rata LST Kota Bogor '+ bulan + " " + tahun, consMeanLST);
+  
+  var imgMeanLST = ee.Image.constant(consMeanLST).rename('LST');
+  print(imgMeanLST);
+
+  //UTFVI
+  var UTFVI = (lstn.subtract(imgMeanLST)).divide(imgMeanLST).rename('utfvi');
+
+  var minUT = geet.min(UTFVI, bogor);
+  var maxUT = geet.max(UTFVI, bogor);
+  var meanUT = geet.mean(UTFVI, bog);
+
+  print(minUT, "min UTFVI");
+  print(maxUT, "max UTFVI");
+  print(meanUT, "mean UTFVI");
+  print(UTFVI, 'utfvi' + tahun);
+ 
+  var meanTF = UTFVI.reduceRegions({
+    reducer: ee.Reducer.mean(),
+    collection: bog,
+    scale: 30
+  });
+  
+  var meanLSTn = lstn.reduceRegions({
+    reducer: ee.Reducer.mean(),
+    collection: bog,
+    scale: 30
+  });
+  
+  // Map.addLayer(UTFVI.clip(bogor), {min:-1, max:1, palette:palettes.kovesi.linear_green_5_95_c69[7]}, 'UTFVI '+tahun);
+  
+  // UTFVI x EEI (Vector)
+  var indeksVektor = UTFVI.gt(-1).add(UTFVI.gt(0)).add(UTFVI.gt(0.005)).add(UTFVI.gt(0.01))
+  .add(UTFVI.gt(0.015)).add(UTFVI.gt(0.02)).clip(bogor).add(UTFVI.gt(1)).clip(bogor);
+  
+  // indeksVektor = indeksVektor.updateMask(indeksVektor);
+  var warna = palettes.kovesi.linear_green_5_95_c69[7].reverse().slice(0,6);
+  // var paletmanual = [warna.slice(0,1)];
+  // Map.addLayer(indeksVektor, {min: 0, max: 6, palette:warna},'UTFVI x EEI ' + tahun);
+  print(indeksVektor,'vektor utfvi');
+
+  // var palets = palettes.misc.tol_rainbow[7];
+  var vi = {min:0,max:6,palette:warna};
+  var TFVis = indeksVektor.visualize(viz);
+
+  Export.image.toDrive({
+    image: TFVis,
+    description: 'UTFVI ' + tahun,
+    region: bog,
+    scale: 30
+  });
+  
+  Export.table.toDrive({
+    collection: meanLSTn.select(['.*'],null,false), 
+    description: 'rata-rataLST' + tahun,
+    folder:"HasilGEE",
+    fileFormat: 'CSV'
+  });
+  
+  var sqdistance = ee.Number(avgD).pow(2);
+
+  //Radiasi pendek keluar
+  var RSoutB4 = toaB4.expression(
+    'pi * L * d * 0.655 ', {
+      'pi': Math.PI,
+      'L' : toaB4.select('TOA_Radiance'),
+      'd' : sqdistance
+    });
+  var RSoutB3 = toaB3.expression(
+    'pi * L * d * 0.655 ', {
+      'pi': Math.PI,
+      'L' : toaB3.select('TOA_Radiance'),
+      'd' : sqdistance
+    });
+  var RSoutB2 = toaB2.expression(
+    'pi * L * d * 0.655 ', {
+      'pi': Math.PI,
+      'L' : toaB2.select('TOA_Radiance'),
+      'd' : sqdistance
+    });
+  
+  var RSoutotal = RSoutB4.add(RSoutB3).add(RSoutB2);
+  var RSout = RSoutotal.divide(3).rename('RSout');
+  // print(RSoutotal, "rstotal");
+  // print(RSout);
+  var meanRSout = RSout.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: bogor.geometry(),
+    scale: 30,
+    maxPixels: 1e9
+  });
+  print("meanRSout", meanRSout);
+  
+  // Albedo
+  var cos_tetaz = ee.Number.expression(
+    'cos((90-SE)*2*pi/360)', {
+      'SE': avgSE,
+      'pi': Math.PI
+    });
+  // print(cos_tetaz);
+  
+  //Albedo
+  //The heat budget of the earth’s surface deduced from space (Smith 2010)
+  
+  var albedo = ee.Image(1).expression(
+    '((0.356*B2) + (0.130*B4) + (0.373*B5) + (0.085*B6) + (0.072*B7) -0.018) / 1.016', {
+      'B2': bestJoin.select('B2'),
+      'B4': bestJoin.select('B4'),
+      'B5': bestJoin.select('B5'),
+      'B6': bestJoin.select('B6'),
+      'B7': bestJoin.select('B7')
+    }).rename("albedo");
+  // print(albedo,"albedo");
+  
+  var maxA = albedo.reduceRegion({
+    reducer: ee.Reducer.max(),
+    geometry: bogor.geometry(),
+    scale: 30,
+    maxPixels: 1e9
+  });
+  // print("max albedo", maxA);
+  
+  var minA = albedo.reduceRegion({
+    reducer: ee.Reducer.min(),
+    geometry: bogor.geometry(),
+    scale: 30,
+    maxPixels: 1e9
+  });
+  // print("min albedo", minA);
+  
+  var RSin = RSout.divide(albedo).rename("RSin");
+  // print(RSin, "RSin");
+  var meanRSin = RSin.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: bogor.geometry(),
+    scale: 30,
+    maxPixels: 1e9
+  });
+  // print("mean RSin", meanRSin);
+  
+  var RLout = ee.Image(1).expression(
+    'lse * 5.67 * (10**-8) * (lst**4) ',
+    {'lse': lse.select('LSE'),
+      'lst': lst.select('LST')
+    }).rename("RLout");
+  // print(RLout, "RLout");
+  
+  var meanRLout = RLout.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: bogor.geometry(),
+    scale: 30,
+    maxPixels: 1e9
+  });
+  // print("mean RLout", meanRLout);
+  
+  // Radiasi Netto
+  var RN = RSin.expression(
+    'RSin - (RSout + RLout)', {
+      'RSin': RSin.select('RSin'),
+      'RSout': RSout.select('RSout'),
+      'RLout': RLout.select('RLout')
+    }).rename('RN');
+  // print(RN, "ini radiasi netto");
+  
+  var meanRN = RN.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: bogor.geometry(),
+    scale: 30,
+    maxPixels: 1e9
+  });
+  // print("mean RN", meanRN);
+  
+  // var groundHeat = class18.expression(
+  //   '(class == 0) ? 0.09*RN : (class == 1) ? 0.07*RN : (class == 2) ? 0.11*RN :0', {
+  //     'class': class18.select('classification'),
+  //     'RN': RN.select('RN')
+  //   }).rename('ground_heat'); 
+  // // print(groundHeat, 'GH');
+  
+  var groundHeat = class18.expression(
+    'Ts/a * (0.0038*a + 0.0074*(a**2))*(1-0.98*(ndvi**4))*Rn', {
+      'Ts': lstn.select('LST'),
+      'a': albedo.select('albedo'),
+      'ndvi': ndvi.select('NDVI'),
+      'Rn': RN.select('RN')
+    }).rename('ground_heat');  
+  
+  var sensibleHeat = class18.expression(
+    '(class == 0) ? 1.5*(RN-G)/(1.5+1)' +
+    ':(class == 1) ? 0.1*(RN-G)/(0.1+1)' +
+    ':(class == 2) ? 0.5*(RN-G)/(0.5+1) :0.5*(RN-G)/(0.5+1)', {
+      'class': class18.select('classification'),
+      'RN': RN.select('RN'),
+      'G': groundHeat.select('ground_heat')
+    }).rename('sensible_heat');
+  // print(sensibleHeat, 'sH');
+  
+  var latentHeat = RN.expression(
+    "b('RN') - (H + G)", {
+      'H': sensibleHeat.select('sensible_heat'),
+      'G': groundHeat.select('ground_heat')
+    }).rename('latent_heat');
+  // print('LH', latentHeat);  
+  
+  var minH = sensibleHeat.reduceRegion({
+    reducer: ee.Reducer.min(),
+    geometry: bogor.geometry(),
+    scale: 30,
+    maxPixels: 1e9
+  });
+  // print("min", minH);
+
+  var BR = sensibleHeat.divide(latentHeat);
+  
+  var minG = groundHeat.reduceRegion({
+    reducer: ee.Reducer.min(),
+    geometry: bogor.geometry(),
+    scale: 30,
+    maxPixels: 1e9
+  });
+  // print("min", minG);
+  
+  //Finally air temperature
+  var airTemp = lst.expression(
+    '(class == 0) ? lst-((18.2*H)/(1.27*1004))' +
+    ':(class == 1) ? lst-((16.3*H)/(1.27*1004))' +
+    ':(class == 2) ? lst-((22.9*H)/(1.27*1004)) :lst-((22.9*H)/(1.27*1004))', {
+      'class': class18.select('classification'),
+      'H': sensibleHeat.select('sensible_heat'),
+      'lst': lst.select('LST')
+    }).rename('air_temp');
+  // print(airTemp, "airtemp");
+  
+  var meanTA = airTemp.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: bogor.geometry(),
+    scale: 30,
+    maxPixels: 1e9
+  });
+  print("mean TA", meanTA);
+  
+  airTemp = airTemp.updateMask(mask);
+  
+  var meanTAn = airTemp.reduceRegions({
+    reducer: ee.Reducer.mean(),
+    collection: bog,
+    scale: 30
+  });
+  
+  Export.table.toDrive({
+    collection: meanTAn.select(['.*'],null,false), 
+    description: 'rata-rataTA' + tahun,
+    folder:"HasilGEE",
+    fileFormat: 'CSV'
+  });
+  
+  var maxTA = geet.max(airTemp, bogor);
+  var minTA = geet.min(airTemp, bogor);
+  var sdTA = geet.sd(airTemp, bogor);
+  var rataTA = geet.mean(airTemp, bogor);
+  print('Suhu udara ' + tahun, airTemp);
+  print('max TA:', maxTA);
+  print('min TA:', minTA);
+  print('StDev TA:', sdTA);
+  print('rata TA:', rataTA);
+
+  
+  var palet = palettes.misc.tol_rainbow[7];
+  var viz = {min:0,max:35,palette:palet};
+  var TAVis = airTemp.clip(bogor).visualize(viz);
+  
+  var regresi = ee.Image.cat(airTemp, lstn);
+  regresi = regresi.reduceRegion({
+    reducer: ee.Reducer.linearFit(),
+    geometry: bogor,
+    scale: 30,
+  });
+  print('Korelasi TA x LST ' + tahun + ':', regresi);
+  
+  var pixelLST = lstn.reduceRegion({
+    reducer: ee.Reducer.toList(),
+    geometry: bog.geometry(),
+    scale: 120,
+    maxPixels: 1e9,
+  });
+    
+  var pixelNDBI = airTemp.reduceRegion({
+    reducer: ee.Reducer.toList(),
+    geometry: bog.geometry(),
+    scale: 120,
+    maxPixels: 1e9,
+  });
+  var x = ee.List(pixelNDBI.get('air_temp'));
+  var y = ee.List(pixelLST.get('LST'));
+
+  var chart = ui.Chart.array.values({array: y, axis: 0, xLabels: x}).setOptions({
+    title: tahun,
+    colors: ['cf513e'],
+    hAxis: {
+      'title': 'TA',
+      // titleTextStyle: {italic: false, bold: true}
+    },
+    vAxis: {
+      'title': 'Suhu permukaan (deg C)',
+      // titleTextStyle: {italic: false, bold: true}
+    },
+    pointSize: 4,
+    dataOpacity: 0.4,
+    trendlines: { 0: {showR2: true, visibleInLegend: true} , 
+                    1: {showR2: true, visibleInLegend: true}}
+  });
+  print(chart);
+  
+  // Raster to Vector LST
+  var TACol = airTemp.clipToCollection(bog);
+
+  var TAVec = TACol.gt(0).add(TACol.gt(20))
+  .add(TACol.gt(23)).add(TACol.gt(26)).add(TACol.gt(29)).add(TACol.gt(32));
+  lstVec = lstVec.updateMask(lstVec.neq(0));
+
+  var palet = palettes.kovesi.linear_green_5_95_c69[7].reverse().slice(0,6);
+  var TAVecVis = TAVec.visualize({min: 0, max: 6, palette:palet});
+
+  // Map.addLayer(TAVec, {min: 0, max: 6, palette:palet},'TA Vektor ' + tahun);
+
+  Export.image.toDrive({
+    image: TAVecVis,
+    description: 'TAVektor' + tahun,
+    region: bog,
+    scale: 30
+  });
+  
+  
+  Export.image.toDrive({
+    image: TAVis,
+    description: 'TA' + tahun,
+    region: bog,
+    scale: 30
+  });
+  // Plot suhu udara
+  // Map.addLayer(airTemp.clip(bogor), viz, "Suhu udara " + bulan + " "+ tahun);
+  
+  var imgArea = ee.Image.pixelArea().addBands(airTemp)
+    .reduceRegion({ 
+      reducer: ee.Reducer.sum(), 
+      geometry: bogor.geometry(),//.geometry(), 
+      scale: 30,
+      bestEffort: true,});
+      
+  print(imgArea, "last");
+
+  // jadi nanti area disimpen ke variabel, terus TA dibagi area
+  
+  return airTemp;
+  
+};
+
+exports.fungsiSuhu = fungsiSuhu;
