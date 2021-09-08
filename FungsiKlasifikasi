@@ -1056,8 +1056,10 @@ var klasifikasi = function (tanggal_awal, tanggal_akhir) {
     return image.updateMask(clouds.lte(30));
   };
     
-  // TOA
+  // Citra TOA
 
+  // Import, filter, and sort landsat images collection by its cloud cover
+  // Impor, saring, dan mengurutkan koleksi citra landsat berdasarkan tutupan awannya
   var l8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_TOA');
   var spatialFiltered = l8.filterBounds(bogor);
   var temporalFiltered = spatialFiltered.filterDate(tanggal_awal, tanggal_akhir).map(cloudMask);
@@ -1065,11 +1067,14 @@ var klasifikasi = function (tanggal_awal, tanggal_akhir) {
   var scene = sorted.first();
   var scene2 = sorted.filterMetadata('WRS_ROW', 'equals', 64).first();
   
+  // Get image date properties
   // Ambil string tanggal image
   var dateS = scene.date();
   dateS = dateS.format('YYYY-MM-dd').getInfo();
   print(dateS, 'date');
   
+  // Merge row 64 & 65 landsat images
+  // Menggabungkan citra landsat row 64 & 65 (Kota Bogor)
   var merged = mosaicByDate(temporalFiltered); //TOA
   //2 scene jadi 1 scene diambil cloud cover terbaik dari TOA
   var composite = merged.filterMetadata('system:id', 'equals', dateS).first();
