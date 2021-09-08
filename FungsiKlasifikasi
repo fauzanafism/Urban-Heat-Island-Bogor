@@ -1016,6 +1016,8 @@ var bogor = ee.FeatureCollection("users/zanomaly/kotaBogor"),
             })]);
 /***** End of imports. If edited, may not auto-convert in the playground. *****/
 
+// This file contains code to classify land cover in Bogor City and export the results to another file
+
 // Create classification function
 // Membuat fungsi klasifikasi
 var klasifikasi = function (tanggal_awal, tanggal_akhir) {
