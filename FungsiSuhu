@@ -3,6 +3,7 @@ var bogor = ee.FeatureCollection("users/zanomaly/kotaBogor"),
     kabBogor = ee.FeatureCollection("users/zanomaly/kabBogor"),
     indos = ee.FeatureCollection("users/zanomaly/gadm36_IDN3_shp");
 /***** End of imports. If edited, may not auto-convert in the playground. *****/
+
 // bogor = bogor.merge(kabBogor);
 var bogbar = indos.filter(ee.Filter.eq("NAME_3","Bogor Barat"));
 var bogsel = indos.filter(ee.Filter.eq("NAME_3","Bogor Selatan"));
