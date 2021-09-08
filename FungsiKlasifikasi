@@ -1076,16 +1076,17 @@ var klasifikasi = function (tanggal_awal, tanggal_akhir) {
   // Merge row 64 & 65 landsat images
   // Menggabungkan citra landsat row 64 & 65 (Kota Bogor)
   var merged = mosaicByDate(temporalFiltered); //TOA
-  //2 scene jadi 1 scene diambil cloud cover terbaik dari TOA
+  // 2 scene jadi 1 scene diambil cloud cover terbaik dari TOA
   var composite = merged.filterMetadata('system:id', 'equals', dateS).first();
 
 
   // Map.addLayer(composite.clip(bogor), {bands: ['B6', 'B5', 'B3'], max: 0.5, gamma: 2}, ('L8 Image' + " " + year), false);
   
-  //gabung semua titik
+  // Merge all class sample point
+  // Gabung semua titik sampel kelas
   var bahan = Air.merge(Urban).merge(Vegetasi);
   
-  //band untuk training
+  // band untuk training
   var bands = ['B2', 'B3', 'B4', 'B5', 'B6', 'B7'];
   
   // data sampel
@@ -1095,18 +1096,21 @@ var klasifikasi = function (tanggal_awal, tanggal_akhir) {
     scale: 30
   });
   
-  // Klasifikasi RandomForest
+  // Peng-klasifikasi RandomForest
   var classifier = ee.Classifier.smileRandomForest(1).train({
     features: training,
     classProperty: 'landcover',
     inputProperties: bands
   });
   
-  // Klasifikasi citra masukan
+  // Meng-klasifikasi citra masukan
   var classified = composite.select(bands).classify(classifier);
   
+  // Get train accuracy value
   var trainAccuracy = classifier.confusionMatrix();
   print('train accuracy:', trainAccuracy.accuracy());
+
+  // Visualize classification map 
 
   var palette = [
   '808080', // urban (0)  // grey
@@ -1127,18 +1131,21 @@ var klasifikasi = function (tanggal_awal, tanggal_akhir) {
     scale: 30
   });
   
-  var options = {lineWidth: 1
-    ,pointSize: 2
-    ,hAxis: {title: 'Kelas'}
-    ,vAxis: {title: 'Jumlah piksel'}
-    ,title: 'Jumlah piksel pada setiap kelas.'
-  }; 
+  // var options = {lineWidth: 1
+  //   ,pointSize: 2
+  //   ,hAxis: {title: 'Kelas'}
+  //   ,vAxis: {title: 'Jumlah piksel'}
+  //   ,title: 'Jumlah piksel pada setiap kelas.'
+  // }; 
   
-  var pixelChart17 = ui.Chart.image.byClass({image: ee.Image(1).addBands(classified)
-    ,classBand: 'classification'
-    ,region: bogor
-    ,reducer: ee.Reducer.count()
-  }).setOptions(options);
+  // var pixelChart17 = ui.Chart.image.byClass({image: ee.Image(1).addBands(classified)
+  //   ,classBand: 'classification'
+  //   ,region: bogor
+  //   ,reducer: ee.Reducer.count()
+  // }).setOptions(options);
+
+  // Calculate area of each class
+  // Menghitung luas setiap kelas tuplah    
 
   function areaClass(image, aoi, kelas) {
     var selectedClass = image.select('classification').eq(kelas);
@@ -1166,6 +1173,5 @@ var klasifikasi = function (tanggal_awal, tanggal_akhir) {
   
   return classified;
 };
-
 
 exports.klasifikasi = klasifikasi;
