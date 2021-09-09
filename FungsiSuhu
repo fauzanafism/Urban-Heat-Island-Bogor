@@ -4,6 +4,7 @@ var bogor = ee.FeatureCollection("users/zanomaly/kotaBogor"),
     indos = ee.FeatureCollection("users/zanomaly/gadm36_IDN3_shp");
 /***** End of imports. If edited, may not auto-convert in the playground. *****/
 
+// District in Bogor City
 // bogor = bogor.merge(kabBogor);
 var bogbar = indos.filter(ee.Filter.eq("NAME_3","Bogor Barat"));
 var bogsel = indos.filter(ee.Filter.eq("NAME_3","Bogor Selatan"));
@@ -12,20 +13,24 @@ var botim = indos.filter(ee.Filter.eq("NAME_3","Bogor Timur"));
 var borut = indos.filter(ee.Filter.eq("NAME_3","Bogor Utara"));
 var tasar = indos.filter(ee.Filter.eq("NAME_3","Tanah Sereal"));
 
-
+// Reusable function with datetime parameters
 // Fungsi untuk digunakan kembali dengan masukan tanggal akhir suatu bulan, bulan, dan tahun
 var fungsiSuhu = function (tgl_akhir, bulan, tahun) {
+  // Import code
   var funClass = require('users/zanomaly/Skripsi:FungsiKlasifikasi'); // input fungsi untuk klasifikasi
   var geet = require('users/elacerda/geet:geet'); // input library geet untuk menghitung indeks spektral dan lst
   var palettes = require('users/gena/packages:palettes'); //input library keperluan pewarnaan
   
+  // Your ROI
   // Masukan Area of Interest
   var bog = indos.filter(ee.Filter.eq("NAME_2","Kota Bogor"));
   
+  // Parse datetime
   // Parse format tanggal
   var tanggalAwal = tahun + "-" + bulan + "-1";
   var tanggalAkhir = tahun + "-" + bulan + "-" + tgl_akhir;
   
+  // Datetime for classify land cover in one year
   // Tanggal klasifikasi satu tahun penuh
   var tanggalKlasAwal = tahun + '-1-1';
   var tanggalKlasAkhir = tahun + '-12-31'; 
