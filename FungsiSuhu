@@ -42,10 +42,12 @@ var fungsiSuhu = function (tgl_akhir, bulan, tahun) {
   // var class20 = funClass.klasifikasi("2020-1-1", "2020-12-31");
   print(class18,'klasifikasi ' + tahun);
   
+  // Import raw and TOA landsat images
   // Masukan data Landsat 8 RAW dan TOA
   var l8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_TOA');
   var l8_raw = ee.ImageCollection('LANDSAT/LC08/C01/T1');
   
+  // Function for merging two row landsat images from an image collection
   // Membuat fungsi untuk menggabungkan dua row L8 dari satu imageCollection
   function mosaicByDate(imcol){
     // imcol: An image collection
