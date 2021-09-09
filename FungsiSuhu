@@ -4,6 +4,15 @@ var bogor = ee.FeatureCollection("users/zanomaly/kotaBogor"),
     indos = ee.FeatureCollection("users/zanomaly/gadm36_IDN3_shp");
 /***** End of imports. If edited, may not auto-convert in the playground. *****/
 
+// This file will contains code to calculate
+// - LST
+// - Air Temperature
+// - NDVI & NDBI 
+// and mapping it 
+// You can use this code by importing it to your own file like this:
+// var fun = require('users/zanomaly/Skripsi:FungsiSuhu');
+// var jan20 = fun.fungsiSuhu(31, 1, 2020);  <-- this will calculate parameters above in January
+
 // District in Bogor City
 // bogor = bogor.merge(kabBogor);
 var bogbar = indos.filter(ee.Filter.eq("NAME_3","Bogor Barat"));
@@ -80,7 +89,7 @@ var fungsiSuhu = function (tgl_akhir, bulan, tahun) {
   };
   
   // Filter and sort images
-  
+
   // TOA
   var spatialFiltered = l8.filterBounds(bogor);
   var temporalFiltered = spatialFiltered.filterDate(tanggalAwal, tanggalAkhir).map(cloudMask);
