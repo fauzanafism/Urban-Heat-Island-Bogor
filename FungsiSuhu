@@ -79,6 +79,8 @@ var fungsiSuhu = function (tgl_akhir, bulan, tahun) {
     return image.updateMask(clouds.lte(30));
   };
   
+  // Filter and sort images
+  
   // TOA
   var spatialFiltered = l8.filterBounds(bogor);
   var temporalFiltered = spatialFiltered.filterDate(tanggalAwal, tanggalAkhir).map(cloudMask);
