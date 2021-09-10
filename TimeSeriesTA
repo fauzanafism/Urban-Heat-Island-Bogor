@@ -1,5 +1,8 @@
+// This is an example code that import FungsiSuhu file
+
+
 var fun = require('users/zanomaly/Skripsi:FungsiSuhu');
-// var jan20 = fun.fungsiSuhu(31, 1, 2020);  
+var jan20 = fun.fungsiSuhu(31, 1, 2020);  
 // var feb20 = fun.fungsiSuhu(29, 2, 2020);  
 // var mar20 = fun.fungsiSuhu(31, 3, 2020);  
 // var apr20 = fun.fungsiSuhu(30, 4, 2020);  
@@ -11,9 +14,8 @@ var fun = require('users/zanomaly/Skripsi:FungsiSuhu');
 // var okt20 = fun.fungsiSuhu(31, 10, 2020);  
 // var nov20 = fun.fungsiSuhu(30, 11, 2020);  
 // var des20 = fun.fungsiSuhu(31, 12, 2020);
-var mei19 = fun.fungsiSuhu(31, 5, 2019);
-// var apr20 = fun.fungsiSuhu(30, 4, 2020);  
-// var apr21 = fun.fungsiSuhu(30, 4, 2021);    
+
+// And below i will create a legend for NDVI treshold
 
 // Plot Legend
 var palettes = require('users/gena/packages:palettes');
